@@ -34,21 +34,23 @@ const MyGlobe = () => {
   // Fetch data from an API or other source
 
   return (
+		<div className="mt-[calc(100vh/12*0.8)]">
 			<Globe
 				data={data}
-				globeImageUrl="//unpkg.com/three-globe/example/img/earth-dark.jpg"
+				globeImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
 				hexPolygonsData={countries.features}
 				hexPolygonResolution={3}
 				hexPolygonMargin={0.2}
 				ref={globeEl}
-				hexPolygonColor={()=>"#ffffff"}
+				// hexPolygonColor={()=>"#ffffff"}
 				animateIn={false}
-				// hexPolygonColor={() => `#${Math.round(Math.random() * Math.pow(2, 24)).toString(16).padStart(6, '0')}`}
+				hexPolygonColor={(el) => { console.log(el); return `#eeff12`;}}
 				// hexPolygonLabel={({ properties: d }) => `
 				//   <b>${d.ADMIN} (${d.ISO_A2})</b> <br />
 				//   Population: <i>${d.POP_EST}</i>
 				// `}
 			/>
+		</div>
   );
 };
 

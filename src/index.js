@@ -6,6 +6,7 @@ import reportWebVitals from './reportWebVitals';
 
 import { RecoilRoot, atom, useRecoilSnapshot } from "recoil";
 import { useEffect } from "react";
+import Header from './Components/Header';
 
 function DebugObserver(){
   const snapshot = useRecoilSnapshot();

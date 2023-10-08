@@ -3,6 +3,7 @@ import {
 	useRecoilState,
 } from 'recoil';
 import { walletState, walletInfoState, secretjsState } from '../States';
+import { Link, useNavigate } from "react-router-dom"
 
 import { SecretNetworkClient } from "secretjs";
 
@@ -13,10 +14,11 @@ function WalletButton() {
 	const [secretjs, setSecretJs] = useRecoilState(secretjsState);
 	const [walletInfo,setWalletInfo ] = useRecoilState(walletInfoState);
 	const [showDropdown, setShowDropdown] = useState(false);
+	const navigate = useNavigate();
 
 	const [callable, setCallable] = useState(false);
 	const CHAIN_ID = "pulsar-3";
-	const url = "https://lcd.mainnet.secretsaturn.net";
+	const url = "https://lcd.testnet.secretsaturn.net";
 	const textReducer = useRef(null);
 
 	useEffect(()=>{
@@ -70,6 +72,15 @@ function WalletButton() {
 		}
 	}, [walletInfo])
 
+	async function delayAndGo(e) {
+    e.preventDefault();
+    if(sessionStorage["wallet_info"]){
+			sessionStorage.clear()
+			navigate("/");
+			if(window.location.pathname === "/")
+				window.location.reload();
+		}
+  }
 
 	return (
 		<div className='relative z-[100000]'>
@@ -88,11 +99,11 @@ function WalletButton() {
 		<div id="dropdownDivider" className={(showDropdown === true ? "" : "hidden ")+" z-[100000] bg-white divide-y divide-gray-100 rounded-lg shadow w-44 dark:bg-gray-700 dark:divide-gray-600 absolute md:mt-2 mt-1"}>
 			<ul className="py-2 text-sm text-gray-700 dark:text-gray-200" aria-labelledby="dropdownDividerButton">
 				<li>
-					<a href="#" className="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white">Dashboard</a>
+					<Link className="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white" to={"/dashboard"}>Dashboard</Link>
 				</li>
 			</ul>
-			<div className="py-2">
-				<a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 dark:text-gray-200 dark:hover:text-white">Separated link</a>
+			<div className="py-2" >
+				<a href='#' className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 dark:text-gray-200 dark:hover:text-white" onClick={delayAndGo} >Logout</a>
 			</div>
 		</div>
 		</div>
