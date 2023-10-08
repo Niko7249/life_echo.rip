@@ -511,7 +511,7 @@ pub fn renew_expire(
     if token.owner != sender_raw {
         return Err(StdError::generic_err(custom_err));
     }
-    if env.block.time < token.expire.minus_seconds(60) {
+    if env.block.time < token.expire.minus_seconds(120) {
         custom_err = "Too soon".to_string();
         return Err(StdError::generic_err(custom_err));
     } else if env.block.time > token.expire {
@@ -519,7 +519,7 @@ pub fn renew_expire(
         return Err(StdError::generic_err(custom_err));
     }
 
-    token.expire = token.expire.plus_seconds(120);
+    token.expire = token.expire.plus_seconds(300);
 
     let token_key = idx.to_le_bytes();
     let mut info_store = PrefixedStorage::new(deps.storage, PREFIX_INFOS);
@@ -4641,7 +4641,7 @@ fn mint_list(
             permissions: Vec::new(),
             unwrapped: !config.sealed_metadata_is_enabled,
             transferable,
-            expire: env.block.time.plus_seconds(120),
+            expire: env.block.time.plus_seconds(300),
         };
 
         // save new token info
