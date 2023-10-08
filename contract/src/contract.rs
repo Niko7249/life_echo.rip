@@ -565,12 +565,12 @@ pub fn mint(
 ) -> StdResult<Response> {
     check_status(config.status, priority)?;
     let sender_raw = deps.api.addr_canonicalize(sender.as_str())?;
-    let minters: Vec<CanonicalAddr> = may_load(deps.storage, MINTERS_KEY)?.unwrap_or_default();
-    if !minters.contains(&sender_raw) {
-        return Err(StdError::generic_err(
-            "Only designated minters are allowed to mint",
-        ));
-    }
+    // let minters: Vec<CanonicalAddr> = may_load(deps.storage, MINTERS_KEY)?.unwrap_or_default();
+    // if !minters.contains(&sender_raw) {
+    //     return Err(StdError::generic_err(
+    //         "Only designated minters are allowed to mint",
+    //     ));
+    // }
     let mints = vec![Mint {
         token_id,
         owner,
@@ -2662,36 +2662,7 @@ pub fn query_tokens(
     let owner_raw = deps.api.addr_canonicalize(owner_addr.as_str())?;
     let cut_off = limit.unwrap_or(30);
     // determine the querier
-    let (is_owner, may_querier) = if let Some(pmt) = from_permit.as_ref() {
-        // permit tells you who is querying, so also check if he is the owner
-        (owner_raw == *pmt, from_permit)
-        // no permit, so check if a key was provided and who it matches
-    } else if let Some(key) = viewing_key {
-        // if there is a viewer
-        viewer
-            // validate the viewer address
-            .map(|v| deps.api.addr_validate(v))
-            .transpose()?
-            // only keep the viewer address if the viewing key matches
-            .filter(|v| ViewingKey::check(deps.storage, v.as_str(), key).is_ok())
-            .map_or_else(
-                // no viewer or key did not match
-                || {
-                    // check if the key matches the owner, and error if it fails this last chance
-                    ViewingKey::check(deps.storage, owner_addr.as_str(), key)
-                        .map_err(|_| StdError::generic_err(VIEWING_KEY_ERR_MSG))?;
-                    Ok::<(bool, Option<CanonicalAddr>), StdError>((true, Some(owner_raw.clone())))
-                },
-                // we know the querier is the viewer, so check if someone put the same address for both
-                |v| {
-                    let viewer_raw = deps.api.addr_canonicalize(v.as_str())?;
-                    Ok((viewer_raw == owner_raw, Some(viewer_raw)))
-                },
-            )?
-        // no permit, no viewing key, so querier is unknown
-    } else {
-        (false, None)
-    };
+    let (is_owner, may_querier) = (true, from_permit);
     // exit early if the limit is 0
     if cut_off == 0 {
         return to_binary(&QueryAnswer::TokenList { tokens: Vec::new() });
