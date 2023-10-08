@@ -1,21 +1,21 @@
 # Build results
-/contract/target
-/contract/contract.wasm
-/contract/contract.wasm.gz
+/target
+contract.wasm
+contract.wasm.gz
 
 # Binaries
-/contract/*.wasm
-/contract/*.wasm.gz
+*.wasm
+*.wasm.gz
 
 # Cargo+Git helper file (https://github.com/rust-lang/cargo/blob/0.44.1/src/cargo/sources/git/utils.rs#L320-L327)
-/contract/.cargo-ok
+.cargo-ok
 
 # Text file backups
-/contract/**/*.rs.bk
+**/*.rs.bk
 
 # macOS
 .DS_Store
 
 # IDEs
-/contract/*.iml
-/contract/.idea
+*.iml
+.idea
