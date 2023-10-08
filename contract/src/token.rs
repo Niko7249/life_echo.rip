@@ -1,4 +1,4 @@
-use cosmwasm_std::CanonicalAddr;
+use cosmwasm_std::{CanonicalAddr, Timestamp};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -17,17 +17,21 @@ pub struct Token {
     /// true if this token is transferable
     pub transferable: bool,
     /// token expiration
-    pub expire: u64,
+    pub expire: Timestamp,
 }
 
 /// token metadata
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq, Debug, Default)]
 pub struct Metadata {
-    /// optional uri for off-chain metadata.  This should be prefixed with `http://`, `https://`, `ipfs://`, or
-    /// `ar://`.  Only use this if you are not using `extension`
-    pub token_uri: Option<String>,
-    /// optional on-chain metadata.  Only use this if you are not using `token_uri`
-    pub extension: Option<Extension>,
+    pub secret_key: String,
+    pub alg: String,
+    pub data: String,
+    // optional uri for off-chain metadata.  This should be prefixed with `http://`, `https://`, `ipfs://`, or
+    // `ar://`.  Only use this if you are not using `extension`
+    // pub token_uri: Option<String>,
+
+    // optional on-chain metadata.  Only use this if you are not using `token_uri`
+    // pub extension: Option<Extension>,
 }
 
 /// metadata extension

@@ -1,12 +1,11 @@
 /// This contract implements SNIP-721 standard:
 /// https://github.com/SecretFoundation/SNIPs/blob/master/SNIP-721.md
 use std::collections::HashSet;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose, Engine as _};
 use cosmwasm_std::{
     attr, entry_point, to_binary, Addr, Api, Binary, BlockInfo, CanonicalAddr, CosmosMsg, Deps,
-    DepsMut, Env, MessageInfo, Response, StdError, StdResult, Storage, WasmMsg,
+    DepsMut, Env, MessageInfo, Response, StdError, StdResult, Storage, Timestamp, WasmMsg,
 };
 use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
 use primitive_types::U256;
@@ -42,8 +41,6 @@ use crate::token::{Metadata, Token};
 pub const BLOCK_SIZE: usize = 256;
 /// max number of token ids to keep in id list block
 pub const ID_BLOCK_SIZE: u32 = 64;
-
-const TWO_WEEKS: Duration = Duration::from_secs(14 * 24 * 60 * 60);
 
 ////////////////////////////////////// Init ///////////////////////////////////////
 /// Returns InitResult
@@ -226,6 +223,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         ),
         ExecuteMsg::Reveal { token_id, .. } => reveal(
             deps,
+            &env,
             &info.sender,
             &config,
             ContractStatus::StopTransactions.to_u8(),
@@ -465,6 +463,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         }
         ExecuteMsg::RenewExpire { token_id, .. } => renew_expire(
             deps,
+            &env,
             &info.sender,
             &config,
             ContractStatus::StopTransactions.to_u8(),
@@ -472,6 +471,61 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         ),
     };
     pad_handle_result(response, BLOCK_SIZE)
+}
+
+pub fn get_expire(storage: &dyn Storage, token_id: &str) -> StdResult<Binary> {
+    let get_token_res = get_token(storage, token_id, None);
+    match get_token_res {
+        Err(err) => Err(err),
+        Ok((token, _idx)) => to_binary(&QueryAnswer::GetExpire {
+            expire: token.expire,
+        }),
+    }
+}
+
+pub fn renew_expire(
+    deps: DepsMut,
+    env: &Env,
+    sender: &Addr,
+    config: &Config,
+    priority: u8,
+    token_id: &str,
+) -> StdResult<Response> {
+    check_status(config.status, priority)?;
+    let sender_raw = deps.api.addr_canonicalize(sender.as_str())?;
+    let mut custom_err = format!("You do not own token {}", token_id);
+    // if token supply is private, don't leak that the token id does not exist
+    // instead just say they do not own that token
+    let opt_err = if config.token_supply_is_public {
+        None
+    } else {
+        Some(&*custom_err)
+    };
+    let (mut token, idx) = get_token(deps.storage, token_id, opt_err)?;
+
+    // let expire_time = UNIX_EPOCH + Duration::from_secs();
+    // let now = SystemTime::now()
+    //     .duration_since(UNIX_EPOCH)
+    //     .expect("Failed to get current time")
+    //     .as_secs();
+    if token.owner != sender_raw {
+        return Err(StdError::generic_err(custom_err));
+    }
+    if env.block.time < token.expire.minus_seconds(60) {
+        custom_err = "Too soon".to_string();
+        return Err(StdError::generic_err(custom_err));
+    } else if env.block.time > token.expire {
+        custom_err = format!("Token {} is expired", token_id);
+        return Err(StdError::generic_err(custom_err));
+    }
+
+    token.expire = token.expire.plus_seconds(120);
+
+    let token_key = idx.to_le_bytes();
+    let mut info_store = PrefixedStorage::new(deps.storage, PREFIX_INFOS);
+    json_save(&mut info_store, &token_key, &token)?;
+
+    Ok(Response::new().set_data(to_binary(&ExecuteAnswer::RenewExpire { status: Success })?))
 }
 
 /// Returns StdResult<Response>
@@ -813,19 +867,20 @@ pub fn set_royalty_info(
 /// * `token_id` - token id String slice of token whose metadata should be updated
 pub fn reveal(
     deps: DepsMut,
+    env: &Env,
     sender: &Addr,
     config: &Config,
     priority: u8,
     token_id: &str,
 ) -> StdResult<Response> {
     check_status(config.status, priority)?;
-    if !config.sealed_metadata_is_enabled {
-        return Err(StdError::generic_err(
-            "Sealed metadata functionality is not enabled for this contract",
-        ));
-    }
-    let sender_raw = deps.api.addr_canonicalize(sender.as_str())?;
-    let custom_err = format!("You do not own token {}", token_id);
+    // if !config.sealed_metadata_is_enabled {
+    //     return Err(StdError::generic_err(
+    //         "Sealed metadata functionality is not enabled for this contract",
+    //     ));
+    // }
+    let _sender_raw = deps.api.addr_canonicalize(sender.as_str())?;
+    let mut custom_err = format!("You do not own token {}", token_id);
     // if token supply is private, don't leak that the token id does not exist
     // instead just say they do not own that token
     let opt_err = if config.token_supply_is_public {
@@ -834,15 +889,17 @@ pub fn reveal(
         Some(&*custom_err)
     };
     let (mut token, idx) = get_token(deps.storage, token_id, opt_err)?;
-    if token.unwrapped {
-        return Err(StdError::generic_err(
-            "This token has already been unwrapped",
-        ));
-    }
+    // if token.unwrapped {
+    //     return Err(StdError::generic_err(
+    //         "This token has already been unwrapped",
+    //     ));
+    // }
 
-    let expire_time = UNIX_EPOCH + Duration::from_secs(token.expire);
-    let now = SystemTime::now();
-    if now < expire_time + TWO_WEEKS && token.owner != sender_raw {
+    custom_err = format!("Token {} is not expired", token_id);
+    // let expire_time = UNIX_EPOCH + Duration::from_secs(token.expire);
+    // let now = SystemTime::now();
+    if env.block.time < token.expire {
+        // && token.owner != sender_raw
         return Err(StdError::generic_err(custom_err));
     }
     token.unwrapped = true;
@@ -859,74 +916,6 @@ pub fn reveal(
         }
     }
     Ok(Response::new().set_data(to_binary(&ExecuteAnswer::Reveal { status: Success })?))
-}
-
-// pub fn get_expire(
-//     deps: DepsMut,
-//     sender: &Addr,
-//     config: &Config,
-//     priority: u8,
-//     token_id: &str,
-// ) -> StdResult<Response> {
-//     check_status(config.status, priority)?;
-//     if !config.sealed_metadata_is_enabled {
-//         return Err(StdError::generic_err(
-//             "Sealed metadata functionality is not enabled for this contract",
-//         ));
-//     }
-//     let (mut token, idx) = get_token(deps.storage, token_id, None)?;
-
-//     Ok(Response::new().set_data(to_binary(&QueryAnswer::GetExpire {
-//         expire: token.expire,
-//     })?))
-// }
-
-pub fn get_expire(storage: &dyn Storage, token_id: &str) -> StdResult<Binary> {
-    let get_token_res = get_token(storage, token_id, None);
-    match get_token_res {
-        Err(err) => Err(err),
-        Ok((token, _idx)) => to_binary(&QueryAnswer::GetExpire {
-            expire: token.expire,
-        }),
-    }
-}
-
-pub fn renew_expire(
-    deps: DepsMut,
-    sender: &Addr,
-    config: &Config,
-    priority: u8,
-    token_id: &str,
-) -> StdResult<Response> {
-    check_status(config.status, priority)?;
-    let sender_raw = deps.api.addr_canonicalize(sender.as_str())?;
-    let custom_err = format!("You do not own token {}", token_id);
-    // if token supply is private, don't leak that the token id does not exist
-    // instead just say they do not own that token
-    let opt_err = if config.token_supply_is_public {
-        None
-    } else {
-        Some(&*custom_err)
-    };
-    let (mut token, idx) = get_token(deps.storage, token_id, opt_err)?;
-
-    let expire_time = UNIX_EPOCH + Duration::from_secs(token.expire);
-    let now = SystemTime::now();
-    if token.owner != sender_raw {
-        return Err(StdError::generic_err(custom_err));
-    }
-    let not_expired_err = format!("Token {} is not expired", token_id);
-    if now < expire_time {
-        return Err(StdError::generic_err(not_expired_err));
-    }
-
-    token.expire = current_time_plus_one_year();
-
-    let token_key = idx.to_le_bytes();
-    let mut info_store = PrefixedStorage::new(deps.storage, PREFIX_INFOS);
-    json_save(&mut info_store, &token_key, &token)?;
-
-    Ok(Response::new().set_data(to_binary(&ExecuteAnswer::RenewExpire { status: Success })?))
 }
 
 /// Returns StdResult<Response>
@@ -1111,7 +1100,7 @@ pub fn set_global_approval(
                 permissions: Vec::new(),
                 unwrapped: false,
                 transferable: true,
-                expire: 0,
+                expire: Timestamp::default(),
             },
             0,
         )
@@ -1205,7 +1194,7 @@ pub fn set_whitelisted_approval(
                 permissions: Vec::new(),
                 unwrapped: false,
                 transferable: true,
-                expire: 0,
+                expire: Timestamp::default(),
             },
             0,
         )
@@ -2263,12 +2252,14 @@ pub fn query_nft_info(storage: &dyn Storage, token_id: &str) -> StdResult<Binary
     if let Some(idx) = may_idx {
         let meta_store = ReadonlyPrefixedStorage::new(storage, PREFIX_PUB_META);
         let meta: Metadata = may_load(&meta_store, &idx.to_le_bytes())?.unwrap_or(Metadata {
-            token_uri: None,
-            extension: None,
+            secret_key: "".to_string(),
+            alg: "".to_string(),
+            data: "".to_string(),
         });
         return to_binary(&QueryAnswer::NftInfo {
-            token_uri: meta.token_uri,
-            extension: meta.extension,
+            secret_key: meta.secret_key,
+            alg: meta.alg,
+            data: meta.data,
         });
     }
     let config: Config = load(storage, CONFIG_KEY)?;
@@ -2282,8 +2273,9 @@ pub fn query_nft_info(storage: &dyn Storage, token_id: &str) -> StdResult<Binary
     }
     // otherwise, just return empty metadata
     to_binary(&QueryAnswer::NftInfo {
-        token_uri: None,
-        extension: None,
+        secret_key: "".to_string(),
+        alg: "".to_string(),
+        data: "".to_string(),
     })
 }
 
@@ -2324,12 +2316,14 @@ pub fn query_private_meta(
     }
     let meta_store = ReadonlyPrefixedStorage::new(deps.storage, PREFIX_PRIV_META);
     let meta: Metadata = may_load(&meta_store, &prep_info.idx.to_le_bytes())?.unwrap_or(Metadata {
-        token_uri: None,
-        extension: None,
+        secret_key: "".to_string(),
+        alg: "".to_string(),
+        data: "".to_string(),
     });
     to_binary(&QueryAnswer::PrivateMetadata {
-        token_uri: meta.token_uri,
-        extension: meta.extension,
+        secret_key: meta.secret_key,
+        alg: meta.alg,
+        data: meta.data,
     })
 }
 
@@ -3702,7 +3696,7 @@ fn set_metadata_impl(
             "The private metadata of a sealed token can not be modified",
         ));
     }
-    enforce_metadata_field_exclusion(metadata)?;
+    // enforce_metadata_field_exclusion(metadata)?;
     let mut meta_store = PrefixedStorage::new(storage, prefix);
     save(&mut meta_store, &idx.to_le_bytes(), metadata)?;
     Ok(())
@@ -4330,7 +4324,6 @@ fn transfer_impl(
         oper_for,
         config,
     )?;
-
     if !token.transferable {
         return Err(StdError::generic_err(format!(
             "Token ID: {} is non-transferable",
@@ -4598,16 +4591,6 @@ fn burn_list(
     Ok(())
 }
 
-fn current_time_plus_one_year() -> u64 {
-    let current_time = SystemTime::now();
-    let duration_since_epoch = current_time
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards");
-    let one_year_in_seconds = 366 * 24 * 60 * 60; // Assuming a year has 365 days
-
-    duration_since_epoch.as_secs() + one_year_in_seconds
-}
-
 /// Returns <Vec<String>>
 ///
 /// mints a list of new tokens and returns the ids of the tokens minted
@@ -4658,11 +4641,7 @@ fn mint_list(
             permissions: Vec::new(),
             unwrapped: !config.sealed_metadata_is_enabled,
             transferable,
-            expire: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards")
-                .as_secs(),
-            // expire: current_time_plus_one_year(),
+            expire: env.block.time.plus_seconds(120),
         };
 
         // save new token info
@@ -4691,12 +4670,12 @@ fn mint_list(
         //
         // save the metadata
         if let Some(pub_meta) = mint.public_metadata {
-            enforce_metadata_field_exclusion(&pub_meta)?;
+            // enforce_metadata_field_exclusion(&pub_meta)?;
             let mut pub_store = PrefixedStorage::new(deps.storage, PREFIX_PUB_META);
             save(&mut pub_store, &token_key, &pub_meta)?;
         }
         if let Some(priv_meta) = mint.private_metadata {
-            enforce_metadata_field_exclusion(&priv_meta)?;
+            // enforce_metadata_field_exclusion(&priv_meta)?;
             let mut priv_store = PrefixedStorage::new(deps.storage, PREFIX_PRIV_META);
             save(&mut priv_store, &token_key, &priv_meta)?;
         }
@@ -4811,14 +4790,14 @@ fn store_royalties(
 /// # Arguments
 ///
 /// * `metadata` - a reference to Metadata
-fn enforce_metadata_field_exclusion(metadata: &Metadata) -> StdResult<()> {
-    if metadata.token_uri.is_some() && metadata.extension.is_some() {
-        return Err(StdError::generic_err(
-            "Metadata can not have BOTH token_uri AND extension",
-        ));
-    }
-    Ok(())
-}
+// fn enforce_metadata_field_exclusion(metadata: &Metadata) -> StdResult<()> {
+//     if metadata.token_uri.is_some() && metadata.extension.is_some() {
+//         return Err(StdError::generic_err(
+//             "Metadata can not have BOTH token_uri AND extension",
+//         ));
+//     }
+//     Ok(())
+// }
 
 /// Returns StdResult<Option<CanonicalAddr>> from determining the querying address (if possible) either
 /// from a permit validation or a ViewerInfo

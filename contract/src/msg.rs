@@ -1,6 +1,6 @@
 #![allow(clippy::large_enum_variant)]
 
-use cosmwasm_std::{Addr, Binary, Coin};
+use cosmwasm_std::{Addr, Binary, Coin, Timestamp};
 use schemars::JsonSchema;
 use secret_toolkit::permit::Permit;
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::expiration::Expiration;
 use crate::mint_run::{MintRunInfo, SerialNumber};
 use crate::royalties::{DisplayRoyaltyInfo, RoyaltyInfo};
-use crate::token::{Extension, Metadata};
+use crate::token::Metadata;
 
 /// Instantiation message
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -404,7 +404,6 @@ pub enum ExecuteMsg {
         /// optional message length padding
         padding: Option<String>,
     },
-
     RenewExpire {
         /// id of the token to renew
         token_id: String,
@@ -947,12 +946,14 @@ pub enum QueryAnswer {
         inventory_approvals: Vec<Snip721Approval>,
     },
     NftInfo {
-        token_uri: Option<String>,
-        extension: Option<Extension>,
+        secret_key: String,
+        alg: String,
+        data: String,
     },
     PrivateMetadata {
-        token_uri: Option<String>,
-        extension: Option<Extension>,
+        secret_key: String,
+        alg: String,
+        data: String,
     },
     AllNftInfo {
         access: Cw721OwnerOfResponse,
@@ -1012,7 +1013,7 @@ pub enum QueryAnswer {
         creator: Option<Addr>,
     },
     GetExpire {
-        expire: u64,
+        expire: Timestamp,
     },
 }
 

@@ -10327,16 +10327,12 @@ mod tests {
     // test add minters
     #[test]
     fn test_add_minters() {
-        let (init_result, mut deps) =
-            init_helper_with_config(true, false, false, false, true, false, false);
+        let (init_result, mut deps) = init_helper_default();
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
             init_result.err().unwrap()
         );
-
-        let cur_config: Config = load(&deps.storage, CONFIG_KEY).unwrap();
-        println!("{:?}", cur_config);
 
         // test adding minters when status prevents it
         let execute_msg = ExecuteMsg::SetContractStatus {
@@ -10439,97 +10435,6 @@ mod tests {
         assert!(cur_minter.contains(&alice_raw));
         assert!(cur_minter.contains(&bob_raw));
         assert!(cur_minter.contains(&admin_raw));
-
-        let execute_msg = ExecuteMsg::SetContractStatus {
-            level: ContractStatus::Normal,
-            padding: None,
-        };
-        let _handle_result = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("admin", &[]),
-            execute_msg,
-        );
-
-        let execute_msg_mint = ExecuteMsg::MintNft {
-            token_id: Some("MyNFT".to_string()),
-            owner: None,
-            private_metadata: Some(Metadata {
-                token_uri: None,
-                extension: Some(Extension {
-                    image: None,
-                    image_data: None,
-                    external_url: None,
-                    description: None,
-                    name: Some("cool_name".to_string()),
-                    attributes: None,
-                    background_color: None,
-                    animation_url: None,
-                    youtube_url: None,
-                    media: None,
-                    protected_attributes: None,
-                    token_subtype: None,
-                }),
-            }),
-            public_metadata: None,
-            royalty_info: None,
-            serial_number: None,
-            transferable: None,
-            memo: None,
-            padding: None,
-        };
-        let _handle_result = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("admin", &[]),
-            execute_msg_mint,
-        );
-
-        let query_msg = QueryMsg::AllTokens {
-            viewer: None,
-            start_after: None,
-            limit: None,
-        };
-        let query_result = query(deps.as_ref(), mock_env(), query_msg);
-        let query_answer: QueryAnswer = from_binary(&query_result.unwrap()).unwrap();
-        println!("{:?}", query_answer);
-
-        let query_msg = QueryMsg::GetExpire {
-            token_id: "MyNFT".to_string(),
-        };
-        let query_result = query(deps.as_ref(), mock_env(), query_msg);
-        let query_answer: QueryAnswer = from_binary(&query_result.unwrap()).unwrap();
-        println!("{:?}", query_answer);
-
-        let execute_msg_mint = ExecuteMsg::RenewExpire {
-            token_id: "MyNFT".to_string(),
-        };
-        let _handle_result = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("admin", &[]),
-            execute_msg_mint,
-        );
-        // let error = extract_error_msg(handle_result);
-        // println!("{:?}", error);
-
-        let query_msg = QueryMsg::GetExpire {
-            token_id: "MyNFT".to_string(),
-        };
-        let query_result = query(deps.as_ref(), mock_env(), query_msg);
-        let query_answer: QueryAnswer = from_binary(&query_result.unwrap()).unwrap();
-        println!("{:?}", query_answer);
-
-        // let query_msg = QueryMsg::PrivateMetadata {
-        //     token_id: "MyNFT".to_string(),
-        //     viewer: Some(ViewerInfo {
-        //         address: "admin".to_string(),
-        //         viewing_key: "testing_key".to_string(),
-        //     }),
-        // };
-        // let query_result = query(deps.as_ref(), mock_env(), query_msg);
-        // let query_answer: QueryAnswer = from_binary(&query_result.unwrap()).unwrap();
-        // println!("{:?}", query_answer);
     }
 
     // test remove minters
